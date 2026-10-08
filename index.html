@@ -1,0 +1,567 @@
+```html
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ESP32 Telemetry Dashboard | Web Bluetooth</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        cyber: {
+                            bg: '#080d16',
+                            card: '#0f172a',
+                            border: '#1e293b',
+                            accent: '#06b6d4',
+                            glow: '#38bdf8',
+                            emerald: '#10b981',
+                            rose: '#f43f5e'
+                        }
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'system-ui', 'sans-serif'],
+                        mono: ['JetBrains Mono', 'monospace']
+                    }
+                }
+            }
+        }
+    </script>
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <style>
+        body {
+            background-color: #050811;
+            background-image: 
+                radial-gradient(at 0% 0%, rgba(6, 182, 212, 0.08) 0px, transparent 50%),
+                radial-gradient(at 100% 100%, rgba(16, 185, 129, 0.05) 0px, transparent 50%);
+            background-attachment: fixed;
+            font-family: 'Inter', sans-serif;
+        }
+
+        /* Glassmorphic card effect */
+        .glass-card {
+            background: rgba(15, 23, 42, 0.75);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+        }
+
+        .glass-card:hover {
+            border-color: rgba(6, 182, 212, 0.3);
+            box-shadow: 0 8px 32px 0 rgba(6, 182, 212, 0.1);
+        }
+
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #090d16;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #1e293b;
+            border-radius: 3px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #06b6d4;
+        }
+
+        /* Neon Glows */
+        .glow-cyan {
+            box-shadow: 0 0 15px rgba(6, 182, 212, 0.3);
+        }
+        .glow-emerald {
+            box-shadow: 0 0 15px rgba(16, 185, 129, 0.3);
+        }
+        .glow-rose {
+            box-shadow: 0 0 15px rgba(244, 63, 94, 0.3);
+        }
+
+        /* Circular Progress Transition */
+        .circle-progress {
+            transition: stroke-dashoffset 0.5s ease-in-out, stroke 0.5s ease;
+        }
+    </style>
+</head>
+<body class="text-slate-200 min-h-screen flex flex-col justify-between selection:bg-cyan-500 selection:text-black">
+
+    <!-- Header / Navbar -->
+    <header class="border-b border-slate-800/80 bg-slate-950/80 backdrop-blur-md sticky top-0 z-50">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3.5 flex items-center justify-between">
+            <div class="flex items-center gap-3">
+                <div class="p-2.5 rounded-xl bg-cyan-500/10 border border-cyan-500/30 text-cyan-400">
+                    <i class="fa-solid fa-bolt-lightning text-xl"></i>
+                </div>
+                <div>
+                    <h1 class="font-bold text-lg tracking-wide text-white flex items-center gap-2">
+                        ESP32 BLE Telemetry
+                        <span class="text-xs font-mono font-normal px-2 py-0.5 rounded-full bg-cyan-500/10 text-cyan-400 border border-cyan-500/20">v2.4 BLE</span>
+                    </h1>
+                    <p class="text-xs text-slate-400">INA219 High-Precision Power Monitor</p>
+                </div>
+            </div>
+
+            <!-- Connection Status & Button -->
+            <div class="flex items-center gap-3">
+                <div id="statusBadge" class="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium bg-slate-900 border border-slate-800 text-slate-400">
+                    <span class="w-2 h-2 rounded-full bg-slate-500" id="statusDot"></span>
+                    <span id="statusText">Disconnected</span>
+                </div>
+
+                <button id="connectBtn" onclick="toggleBluetooth()" class="flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold uppercase tracking-wider transition-all duration-300 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-slate-950 font-bold shadow-lg shadow-cyan-500/20">
+                    <i class="fa-solid fa-bluetooth text-sm"></i>
+                    <span id="btnText">Connect BLE</span>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Dashboard Container -->
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 w-full grow space-y-6">
+
+        <!-- Top Status Alert Banner (Hidden by Default) -->
+        <div id="alertBanner" class="hidden p-4 rounded-2xl bg-rose-500/10 border border-rose-500/30 text-rose-300 flex items-center justify-between animate-pulse">
+            <div class="flex items-center gap-3">
+                <i class="fa-solid fa-triangle-exclamation text-xl text-rose-400"></i>
+                <div>
+                    <h4 class="font-semibold text-sm">Low Battery Warning</h4>
+                    <p class="text-xs text-rose-300/80">Battery output has dropped below 3.30V (15%). Recharge recommended.</p>
+                </div>
+            </div>
+            <button onclick="dismissAlert()" class="text-rose-400 hover:text-rose-200 text-sm">
+                <i class="fa-solid fa-xmark"></i>
+            </button>
+        </div>
+
+        <!-- Metrics Grid -->
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
+
+            <!-- Card 1: State of Charge (Battery % Gauge Ring) -->
+            <div class="glass-card rounded-2xl p-5 flex flex-col justify-between relative overflow-hidden">
+                <div class="flex items-center justify-between mb-2">
+                    <span class="text-xs font-semibold text-slate-400 uppercase tracking-wider">State of Charge</span>
+                    <i class="fa-solid fa-battery-half text-slate-500"></i>
+                </div>
+
+                <div class="flex items-center justify-center py-2 relative">
+                    <!-- SVG Circular Progress -->
+                    <svg class="w-32 h-32 transform -rotate-90" viewBox="0 0 120 120">
+                        <circle cx="60" cy="60" r="50" stroke="currentColor" stroke-width="10" class="text-slate-800" fill="transparent" />
+                        <circle id="batteryRing" cx="60" cy="60" r="50" stroke="currentColor" stroke-width="10" 
+                                class="circle-progress text-cyan-400" 
+                                fill="transparent" 
+                                stroke-dasharray="314.15" 
+                                stroke-dashoffset="314.15" 
+                                stroke-linecap="round" />
+                    </svg>
+                    <div class="absolute flex flex-col items-center">
+                        <span id="socPercentage" class="text-3xl font-extrabold text-white font-mono">0%</span>
+                        <span id="socStatusText" class="text-[10px] text-slate-400 tracking-wider font-medium uppercase mt-0.5">Idle</span>
+                    </div>
+                </div>
+
+                <div class="mt-2 text-xs text-slate-400 flex justify-between border-t border-slate-800/80 pt-2.5">
+                    <span>Range: 3.20V - 4.20V</span>
+                    <span id="socTrend" class="text-emerald-400 font-mono">100% MAX</span>
+                </div>
+            </div>
+
+            <!-- Card 2: Bus Voltage -->
+            <div class="glass-card rounded-2xl p-5 flex flex-col justify-between">
+                <div class="flex items-center justify-between">
+                    <span class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Bus Voltage</span>
+                    <div class="p-2 rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                        <i class="fa-solid fa-car-battery text-sm"></i>
+                    </div>
+                </div>
+
+                <div class="my-4">
+                    <div class="flex items-baseline gap-2">
+                        <span id="voltageVal" class="text-4xl font-extrabold text-white font-mono tracking-tight">0.00</span>
+                        <span class="text-sm font-semibold text-emerald-400">V</span>
+                    </div>
+                    <p class="text-xs text-slate-400 mt-1">Live Terminal Load Potential</p>
+                </div>
+
+                <div class="w-full bg-slate-800/80 h-1.5 rounded-full overflow-hidden">
+                    <div id="voltageBar" class="bg-emerald-400 h-full w-0 transition-all duration-300"></div>
+                </div>
+            </div>
+
+            <!-- Card 3: Current Draw -->
+            <div class="glass-card rounded-2xl p-5 flex flex-col justify-between">
+                <div class="flex items-center justify-between">
+                    <span class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Current Draw</span>
+                    <div class="p-2 rounded-lg bg-cyan-500/10 text-cyan-400 border border-cyan-500/20">
+                        <i class="fa-solid fa-wave-square text-sm"></i>
+                    </div>
+                </div>
+
+                <div class="my-4">
+                    <div class="flex items-baseline gap-2">
+                        <span id="currentVal" class="text-4xl font-extrabold text-white font-mono tracking-tight">0</span>
+                        <span id="currentUnit" class="text-sm font-semibold text-cyan-400">mA</span>
+                    </div>
+                    <p class="text-xs text-slate-400 mt-1" id="currentAmpsText">Equivalent: 0.000 A</p>
+                </div>
+
+                <div class="w-full bg-slate-800/80 h-1.5 rounded-full overflow-hidden">
+                    <div id="currentBar" class="bg-cyan-400 h-full w-0 transition-all duration-300"></div>
+                </div>
+            </div>
+
+            <!-- Card 4: Total Power -->
+            <div class="glass-card rounded-2xl p-5 flex flex-col justify-between">
+                <div class="flex items-center justify-between">
+                    <span class="text-xs font-semibold text-slate-400 uppercase tracking-wider">System Power</span>
+                    <div class="p-2 rounded-lg bg-purple-500/10 text-purple-400 border border-purple-500/20">
+                        <i class="fa-solid fa-plug-circle-bolt text-sm"></i>
+                    </div>
+                </div>
+
+                <div class="my-4">
+                    <div class="flex items-baseline gap-2">
+                        <span id="powerVal" class="text-4xl font-extrabold text-white font-mono tracking-tight">0</span>
+                        <span id="powerUnit" class="text-sm font-semibold text-purple-400">mW</span>
+                    </div>
+                    <p class="text-xs text-slate-400 mt-1" id="powerWattsText">Instantaneous Consumption</p>
+                </div>
+
+                <div class="w-full bg-slate-800/80 h-1.5 rounded-full overflow-hidden">
+                    <div id="powerBar" class="bg-purple-400 h-full w-0 transition-all duration-300"></div>
+                </div>
+            </div>
+
+        </div>
+
+        <!-- Middle Section: Remote Controls & Diagnostics -->
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+            <!-- Control Buttons Panel -->
+            <div class="glass-card rounded-2xl p-5 space-y-4 lg:col-span-1 flex flex-col justify-between">
+                <div>
+                    <h3 class="text-sm font-semibold text-white tracking-wide uppercase flex items-center gap-2 mb-4">
+                        <i class="fa-solid fa-sliders text-cyan-400"></i>
+                        Hardware Controls
+                    </h3>
+
+                    <div class="space-y-3">
+                        <!-- Toggle Alert LED Button -->
+                        <button id="toggleLedBtn" onclick="sendBleCommand('TOGGLE_LED')" disabled 
+                                class="w-full p-3.5 rounded-xl bg-slate-900 border border-slate-800 hover:border-cyan-500/40 text-slate-300 hover:text-white flex items-center justify-between transition-all duration-200 disabled:opacity-40 disabled:cursor-not-allowed">
+                            <div class="flex items-center gap-3">
+                                <i class="fa-solid fa-lightbulb text-amber-400"></i>
+                                <div class="text-left">
+                                    <div class="text-xs font-semibold">Toggle Alert LED</div>
+                                    <div class="text-[10px] text-slate-500">GPIO 2 Indicator Control</div>
+                                </div>
+                            </div>
+                            <span id="ledStatusBadge" class="text-[10px] font-mono px-2 py-0.5 rounded bg-slate-800 text-slate-400">UNKNOWN</span>
+                        </button>
+
+                        <!-- Force Telemetry Request Button -->
+                        <button id="refreshDataBtn" onclick="sendBleCommand('GET_READING')" disabled 
+                                class="w-full p-3.5 rounded-xl bg-slate-900 border border-slate-800 hover:border-emerald-500/40 text-slate-300 hover:text-white flex items-center justify-between transition-all duration-200 disabled:opacity-40 disabled:cursor-not-allowed">
+                            <div class="flex items-center gap-3">
+                                <i class="fa-solid fa-arrows-rotate text-emerald-400"></i>
+                                <div class="text-left">
+                                    <div class="text-xs font-semibold">Request Telemetry Poll</div>
+                                    <div class="text-[10px] text-slate-500">Force immediate INA219 update</div>
+                                </div>
+                            </div>
+                            <i class="fa-solid fa-chevron-right text-xs text-slate-600"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Auxiliary Metrics Box -->
+                <div class="p-3.5 rounded-xl bg-slate-950/60 border border-slate-800/80 space-y-2 mt-4">
+                    <div class="text-[11px] text-slate-400 font-semibold uppercase tracking-wider flex justify-between">
+                        <span>Shunt Drop Voltage</span>
+                        <span id="shuntVal" class="font-mono text-cyan-400">0.00 mV</span>
+                    </div>
+                    <div class="text-[11px] text-slate-400 font-semibold uppercase tracking-wider flex justify-between">
+                        <span>Calibration Limit</span>
+                        <span class="font-mono text-slate-300">32V / 2.0A</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Terminal Output Log -->
+            <div class="glass-card rounded-2xl p-5 lg:col-span-2 flex flex-col h-80 sm:h-auto">
+                <div class="flex items-center justify-between mb-3">
+                    <h3 class="text-sm font-semibold text-white tracking-wide uppercase flex items-center gap-2">
+                        <i class="fa-solid fa-terminal text-emerald-400"></i>
+                        Live Bluetooth Terminal Console
+                    </h3>
+                    <div class="flex items-center gap-2">
+                        <button onclick="clearConsole()" class="px-2.5 py-1 text-[11px] font-mono rounded-lg bg-slate-800 text-slate-400 hover:text-slate-200 hover:bg-slate-700 transition">
+                            Clear Log
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Terminal Display Box -->
+                <div id="terminalOutput" class="grow bg-slate-950 border border-slate-900 rounded-xl p-3.5 font-mono text-xs text-slate-300 overflow-y-auto space-y-1.5 shadow-inner">
+                    <div class="text-slate-600">-- BLE Telemetry Console Initialized --</div>
+                    <div class="text-slate-500">Click [Connect BLE] to pair with 'ESP32_Battery_Monitor'</div>
+                </div>
+            </div>
+
+        </div>
+
+    </main>
+
+    <!-- Footer -->
+    <footer class="border-t border-slate-900 bg-slate-950/60 py-4 text-center text-xs text-slate-500">
+        <p>ESP32 Bluetooth Low Energy Telemetry • Nordic UART Service (NUS)</p>
+    </footer>
+
+    <script>
+        // Nordic UART Service (NUS) UUIDs
+        const NUS_SERVICE_UUID = '6e400001-b5a3-f393-e0a9-e50e24dcca9e';
+        const NUS_CHARACTERISTIC_RX = '6e400002-b5a3-f393-e0a9-e50e24dcca9e'; // Write to ESP32
+        const NUS_CHARACTERISTIC_TX = '6e400003-b5a3-f393-e0a9-e50e24dcca9e'; // Notifications from ESP32
+
+        // BLE State Variables
+        let bleDevice = null;
+        let gattServer = null;
+        let rxCharacteristic = null;
+        let txCharacteristic = null;
+        let isConnected = false;
+
+        // UI Element References
+        const connectBtn = document.getElementById('connectBtn');
+        const btnText = document.getElementById('btnText');
+        const statusDot = document.getElementById('statusDot');
+        const statusText = document.getElementById('statusText');
+        const toggleLedBtn = document.getElementById('toggleLedBtn');
+        const refreshDataBtn = document.getElementById('refreshDataBtn');
+        const terminalOutput = document.getElementById('terminalOutput');
+        const alertBanner = document.getElementById('alertBanner');
+
+        // Toggle Bluetooth Connection
+        async function toggleBluetooth() {
+            if (isConnected) {
+                disconnectBLE();
+            } else {
+                await requestBLEConnection();
+            }
+        }
+
+        // Request BLE Device Connection
+        async function requestBLEConnection() {
+            try {
+                logToTerminal('Scanning for BLE devices...', 'system');
+                
+                bleDevice = await navigator.bluetooth.requestDevice({
+                    filters: [{ namePrefix: 'ESP32' }],
+                    optionalServices: [NUS_SERVICE_UUID]
+                });
+
+                logToTerminal(`Device selected: ${bleDevice.name}`, 'system');
+                
+                bleDevice.addEventListener('gattserverdisconnected', onDisconnected);
+
+                // Connect to GATT Server
+                logToTerminal('Connecting to GATT Server...', 'system');
+                gattServer = await bleDevice.gatt.connect();
+
+                // Get Nordic UART Service
+                const service = await gattServer.getPrimaryService(NUS_SERVICE_UUID);
+
+                // Get Characteristics
+                rxCharacteristic = await service.getCharacteristic(NUS_CHARACTERISTIC_RX);
+                txCharacteristic = await service.getCharacteristic(NUS_CHARACTERISTIC_TX);
+
+                // Enable TX Notifications
+                await txCharacteristic.startNotifications();
+                txCharacteristic.addEventListener('characteristicvaluechanged', handleIncomingData);
+
+                updateConnectionState(true);
+                logToTerminal('Connected successfully via BLE!', 'success');
+
+            } catch (error) {
+                logToTerminal(`Error: ${error.message || error}`, 'error');
+                updateConnectionState(false);
+            }
+        }
+
+        // Handle Connection Disconnect
+        function disconnectBLE() {
+            if (bleDevice && bleDevice.gatt.connected) {
+                bleDevice.gatt.disconnect();
+            }
+            onDisconnected();
+        }
+
+        function onDisconnected() {
+            updateConnectionState(false);
+            logToTerminal('Disconnected from BLE device.', 'warning');
+        }
+
+        // Update UI state on Connect/Disconnect
+        function updateConnectionState(connected) {
+            isConnected = connected;
+            if (connected) {
+                btnText.textContent = 'Disconnect';
+                statusDot.className = 'w-2 h-2 rounded-full bg-emerald-400 glow-emerald';
+                statusText.textContent = bleDevice ? bleDevice.name : 'Connected';
+                toggleLedBtn.disabled = false;
+                refreshDataBtn.disabled = false;
+            } else {
+                btnText.textContent = 'Connect BLE';
+                statusDot.className = 'w-2 h-2 rounded-full bg-slate-500';
+                statusText.textContent = 'Disconnected';
+                toggleLedBtn.disabled = true;
+                refreshDataBtn.disabled = true;
+                bleDevice = null;
+                gattServer = null;
+            }
+        }
+
+        // Send Command String to ESP32 over BLE RX Characteristic
+        async function sendBleCommand(cmd) {
+            if (!rxCharacteristic || !isConnected) return;
+            try {
+                const encoder = new TextEncoder();
+                await rxCharacteristic.writeValue(encoder.encode(cmd + '\n'));
+                logToTerminal(`> Sent command: ${cmd}`, 'outbound');
+            } catch (err) {
+                logToTerminal(`Failed to send command: ${err}`, 'error');
+            }
+        }
+
+        // Process incoming telemetry data stream from ESP32 TX Characteristic
+        function handleIncomingData(event) {
+            const value = event.target.value;
+            const decoder = new TextDecoder('utf-8');
+            const dataStr = decoder.decode(value).trim();
+
+            logToTerminal(`< ${dataStr}`, 'inbound');
+
+            // Try to parse JSON formatted telemetry payload
+            try {
+                if (dataStr.startsWith('{') && dataStr.endsWith('}')) {
+                    const data = JSON.parse(dataStr);
+                    updateDashboardMetrics(data);
+                }
+            } catch (err) {
+                // Ignore raw non-JSON text logs
+            }
+        }
+
+        // Update Gauges and Visual Cards
+        function updateDashboardMetrics(data) {
+            const { v, i, p, pct, shunt, led } = data;
+
+            // 1. Bus Voltage
+            if (v !== undefined) {
+                document.getElementById('voltageVal').textContent = v.toFixed(2);
+                const vPercent = Math.min(Math.max(((v - 3.0) / 1.5) * 100, 0), 100);
+                document.getElementById('voltageBar').style.width = `${vPercent}%`;
+            }
+
+            // 2. Current
+            if (i !== undefined) {
+                document.getElementById('currentVal').textContent = Math.round(i);
+                document.getElementById('currentAmpsText').textContent = `Equivalent: ${(i / 1000).toFixed(3)} A`;
+                const iPercent = Math.min((i / 2000) * 100, 100); // Scale against 2000mA limit
+                document.getElementById('currentBar').style.width = `${iPercent}%`;
+            }
+
+            // 3. Power
+            if (p !== undefined) {
+                document.getElementById('powerVal').textContent = Math.round(p);
+                const pPercent = Math.min((p / 8000) * 100, 100); // Scale against 8000mW limit
+                document.getElementById('powerBar').style.width = `${pPercent}%`;
+            }
+
+            // 4. Shunt Voltage
+            if (shunt !== undefined) {
+                document.getElementById('shuntVal').textContent = `${shunt.toFixed(2)} mV`;
+            }
+
+            // 5. LED Status Badge
+            if (led !== undefined) {
+                const badge = document.getElementById('ledStatusBadge');
+                badge.textContent = led ? 'STATE: ON' : 'STATE: OFF';
+                badge.className = led 
+                    ? 'text-[10px] font-mono px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30' 
+                    : 'text-[10px] font-mono px-2 py-0.5 rounded bg-slate-800 text-slate-400';
+            }
+
+            // 6. Battery State of Charge Ring & Alerts
+            if (pct !== undefined) {
+                document.getElementById('socPercentage').textContent = `${pct}%`;
+                
+                // Update Circular Ring Offset (Circumference = 2 * PI * 50 = ~314.15)
+                const circumference = 314.15;
+                const offset = circumference - (pct / 100) * circumference;
+                const batteryRing = document.getElementById('batteryRing');
+                batteryRing.style.strokeDashoffset = offset;
+
+                const socStatusText = document.getElementById('socStatusText');
+
+                if (pct <= 15) {
+                    batteryRing.setAttribute('class', 'circle-progress text-rose-500');
+                    alertBanner.classList.remove('hidden');
+                    socStatusText.textContent = 'Critical Low';
+                    socStatusText.className = 'text-[10px] text-rose-400 tracking-wider font-medium uppercase mt-0.5';
+                } else if (pct <= 40) {
+                    batteryRing.setAttribute('class', 'circle-progress text-amber-400');
+                    alertBanner.classList.add('hidden');
+                    socStatusText.textContent = 'Discharging';
+                    socStatusText.className = 'text-[10px] text-amber-400 tracking-wider font-medium uppercase mt-0.5';
+                } else {
+                    batteryRing.setAttribute('class', 'circle-progress text-emerald-400');
+                    alertBanner.classList.add('hidden');
+                    socStatusText.textContent = 'Normal';
+                    socStatusText.className = 'text-[10px] text-emerald-400 tracking-wider font-medium uppercase mt-0.5';
+                }
+            }
+        }
+
+        // Print lines into Live Terminal Log Box
+        function logToTerminal(message, type = 'info') {
+            const line = document.createElement('div');
+            const timestamp = new Date().toLocaleTimeString();
+
+            let colorClass = 'text-slate-300';
+            if (type === 'outbound') colorClass = 'text-cyan-400 font-semibold';
+            if (type === 'inbound') colorClass = 'text-emerald-400';
+            if (type === 'system') colorClass = 'text-purple-400';
+            if (type === 'warning') colorClass = 'text-amber-400';
+            if (type === 'error') colorClass = 'text-rose-400';
+
+            line.className = `${colorClass} leading-relaxed flex items-start gap-2`;
+            line.innerHTML = `<span class="text-slate-600 shrink-0">[${timestamp}]</span> <span>${escapeHtml(message)}</span>`;
+
+            terminalOutput.appendChild(line);
+            terminalOutput.scrollTop = terminalOutput.scrollHeight;
+        }
+
+        function clearConsole() {
+            terminalOutput.innerHTML = '<div class="text-slate-600">-- Log Cleared --</div>';
+        }
+
+        function dismissAlert() {
+            alertBanner.classList.add('hidden');
+        }
+
+        function escapeHtml(text) {
+            return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+        }
+    </script>
+</body>
+</html>
+```
