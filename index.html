@@ -1,567 +1,481 @@
-```html
 <!DOCTYPE html>
-<html lang="en" class="dark">
+<html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ESP32 Telemetry Dashboard | Web Bluetooth</title>
-    <!-- Tailwind CSS CDN -->
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script>
-        tailwind.config = {
-            darkMode: 'class',
-            theme: {
-                extend: {
-                    colors: {
-                        cyber: {
-                            bg: '#080d16',
-                            card: '#0f172a',
-                            border: '#1e293b',
-                            accent: '#06b6d4',
-                            glow: '#38bdf8',
-                            emerald: '#10b981',
-                            rose: '#f43f5e'
-                        }
-                    },
-                    fontFamily: {
-                        sans: ['Inter', 'system-ui', 'sans-serif'],
-                        mono: ['JetBrains Mono', 'monospace']
-                    }
-                }
-            }
-        }
-    </script>
-    <!-- Google Fonts -->
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
-    <!-- FontAwesome Icons -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    
-    <style>
-        body {
-            background-color: #050811;
-            background-image: 
-                radial-gradient(at 0% 0%, rgba(6, 182, 212, 0.08) 0px, transparent 50%),
-                radial-gradient(at 100% 100%, rgba(16, 185, 129, 0.05) 0px, transparent 50%);
-            background-attachment: fixed;
-            font-family: 'Inter', sans-serif;
-        }
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ESP32 Telemetry & Battery Dashboard</title>
+  <style>
+    :root {
+      --bg: #090d16;
+      --card-bg: #111827;
+      --border: #1f2937;
+      --accent: #10b981;
+      --accent-glow: rgba(16, 185, 129, 0.2);
+      --danger: #ef4444;
+      --text: #f3f4f6;
+      --subtext: #9ca3af;
+      --blue: #3b82f6;
+      --purple: #8b5cf6;
+    }
 
-        /* Glassmorphic card effect */
-        .glass-card {
-            background: rgba(15, 23, 42, 0.75);
-            backdrop-filter: blur(12px);
-            border: 1px solid rgba(255, 255, 255, 0.08);
-            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
-        }
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    }
 
-        .glass-card:hover {
-            border-color: rgba(6, 182, 212, 0.3);
-            box-shadow: 0 8px 32px 0 rgba(6, 182, 212, 0.1);
-        }
+    body {
+      background-color: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
 
-        /* Custom Scrollbar */
-        ::-webkit-scrollbar {
-            width: 6px;
-            height: 6px;
-        }
-        ::-webkit-scrollbar-track {
-            background: #090d16;
-        }
-        ::-webkit-scrollbar-thumb {
-            background: #1e293b;
-            border-radius: 3px;
-        }
-        ::-webkit-scrollbar-thumb:hover {
-            background: #06b6d4;
-        }
+    .container {
+      width: 100%;
+      max-width: 850px;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
 
-        /* Neon Glows */
-        .glow-cyan {
-            box-shadow: 0 0 15px rgba(6, 182, 212, 0.3);
-        }
-        .glow-emerald {
-            box-shadow: 0 0 15px rgba(16, 185, 129, 0.3);
-        }
-        .glow-rose {
-            box-shadow: 0 0 15px rgba(244, 63, 94, 0.3);
-        }
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: var(--card-bg);
+      padding: 16px 24px;
+      border-radius: 16px;
+      border: 1px solid var(--border);
+    }
 
-        /* Circular Progress Transition */
-        .circle-progress {
-            transition: stroke-dashoffset 0.5s ease-in-out, stroke 0.5s ease;
-        }
-    </style>
+    .title-group h1 {
+      font-size: 1.3rem;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .title-group p {
+      font-size: 0.85rem;
+      color: var(--subtext);
+      margin-top: 2px;
+    }
+
+    .btn {
+      background: var(--accent);
+      color: #000;
+      font-weight: 600;
+      border: none;
+      padding: 10px 18px;
+      border-radius: 10px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      transition: all 0.2s;
+    }
+
+    .btn:hover {
+      opacity: 0.9;
+      transform: translateY(-1px);
+    }
+
+    .btn-disconnect {
+      background: var(--danger);
+      color: white;
+    }
+
+    .status-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 10px;
+      border-radius: 20px;
+      font-size: 0.75rem;
+      background: #1f2937;
+      color: var(--subtext);
+    }
+
+    .status-badge.online {
+      background: rgba(16, 185, 129, 0.15);
+      color: var(--accent);
+      border: 1px solid rgba(16, 185, 129, 0.3);
+    }
+
+    .dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: currentColor;
+    }
+
+    /* Grid Layout */
+    .metrics-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 16px;
+    }
+
+    .card {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .card h3 {
+      font-size: 0.8rem;
+      color: var(--subtext);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 10px;
+    }
+
+    .card .value {
+      font-size: 2rem;
+      font-weight: 700;
+      color: var(--text);
+    }
+
+    .card .unit {
+      font-size: 1rem;
+      color: var(--subtext);
+      font-weight: 400;
+    }
+
+    /* Battery Card Special Styling */
+    .battery-card {
+      grid-column: span 1;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+    }
+
+    .battery-bar-container {
+      width: 100%;
+      height: 14px;
+      background: #1f2937;
+      border-radius: 10px;
+      overflow: hidden;
+      margin-top: 15px;
+      position: relative;
+    }
+
+    .battery-bar-fill {
+      height: 100%;
+      width: 0%;
+      background: var(--accent);
+      transition: width 0.4s ease, background-color 0.4s ease;
+    }
+
+    /* Control Panel Section */
+    .controls-panel {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 20px;
+    }
+
+    .controls-panel h3 {
+      font-size: 0.9rem;
+      color: var(--subtext);
+      margin-bottom: 15px;
+      text-transform: uppercase;
+    }
+
+    .btn-group {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .control-btn {
+      background: #1f2937;
+      color: var(--text);
+      border: 1px solid var(--border);
+      padding: 12px 20px;
+      border-radius: 10px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .control-btn:hover {
+      background: #374151;
+    }
+
+    /* Terminal Console */
+    .console-panel {
+      background: #000;
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 16px;
+      font-family: "Courier New", Courier, monospace;
+    }
+
+    .console-header {
+      display: flex;
+      justify-content: space-between;
+      color: var(--subtext);
+      font-size: 0.8rem;
+      margin-bottom: 8px;
+    }
+
+    .console-logs {
+      height: 120px;
+      overflow-y: auto;
+      font-size: 0.85rem;
+      color: var(--accent);
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .log-entry {
+      opacity: 0.9;
+    }
+    .log-entry.err { color: var(--danger); }
+    .log-entry.info { color: var(--blue); }
+
+    @media (max-width: 600px) {
+      header { flex-direction: column; gap: 12px; align-items: flex-start; }
+      .metrics-grid { grid-template-columns: 1fr 1fr; }
+    }
+  </style>
 </head>
-<body class="text-slate-200 min-h-screen flex flex-col justify-between selection:bg-cyan-500 selection:text-black">
+<body>
 
-    <!-- Header / Navbar -->
-    <header class="border-b border-slate-800/80 bg-slate-950/80 backdrop-blur-md sticky top-0 z-50">
-        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3.5 flex items-center justify-between">
-            <div class="flex items-center gap-3">
-                <div class="p-2.5 rounded-xl bg-cyan-500/10 border border-cyan-500/30 text-cyan-400">
-                    <i class="fa-solid fa-bolt-lightning text-xl"></i>
-                </div>
-                <div>
-                    <h1 class="font-bold text-lg tracking-wide text-white flex items-center gap-2">
-                        ESP32 BLE Telemetry
-                        <span class="text-xs font-mono font-normal px-2 py-0.5 rounded-full bg-cyan-500/10 text-cyan-400 border border-cyan-500/20">v2.4 BLE</span>
-                    </h1>
-                    <p class="text-xs text-slate-400">INA219 High-Precision Power Monitor</p>
-                </div>
-            </div>
+<div class="container">
+  <!-- Header -->
+  <header>
+    <div class="title-group">
+      <h1>🔋 ESP32 Telemetry Dashboard</h1>
+      <p>Web Bluetooth API (BLE) Direct Connection</p>
+    </div>
+    <div style="display:flex; align-items:center; gap:12px;">
+      <span id="statusBadge" class="status-badge"><span class="dot"></span> Disconnected</span>
+      <button id="connectBtn" class="btn" onclick="toggleConnect()">
+        <span>Connect BLE</span>
+      </button>
+    </div>
+  </header>
 
-            <!-- Connection Status & Button -->
-            <div class="flex items-center gap-3">
-                <div id="statusBadge" class="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium bg-slate-900 border border-slate-800 text-slate-400">
-                    <span class="w-2 h-2 rounded-full bg-slate-500" id="statusDot"></span>
-                    <span id="statusText">Disconnected</span>
-                </div>
+  <!-- Metrics Grid -->
+  <div class="metrics-grid">
+    <!-- Voltage -->
+    <div class="card">
+      <h3>Bus Voltage</h3>
+      <div class="value"><span id="valVolt">0.00</span> <span class="unit">V</span></div>
+    </div>
 
-                <button id="connectBtn" onclick="toggleBluetooth()" class="flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold uppercase tracking-wider transition-all duration-300 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-slate-950 font-bold shadow-lg shadow-cyan-500/20">
-                    <i class="fa-solid fa-bluetooth text-sm"></i>
-                    <span id="btnText">Connect BLE</span>
-                </button>
-            </div>
-        </div>
-    </header>
+    <!-- Current -->
+    <div class="card">
+      <h3>Current Draw</h3>
+      <div class="value" style="color: var(--blue)"><span id="valCurr">0</span> <span class="unit">mA</span></div>
+    </div>
 
-    <!-- Main Dashboard Container -->
-    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 w-full grow space-y-6">
+    <!-- Power -->
+    <div class="card">
+      <h3>Power Consumption</h3>
+      <div class="value" style="color: var(--purple)"><span id="valPow">0</span> <span class="unit">mW</span></div>
+    </div>
 
-        <!-- Top Status Alert Banner (Hidden by Default) -->
-        <div id="alertBanner" class="hidden p-4 rounded-2xl bg-rose-500/10 border border-rose-500/30 text-rose-300 flex items-center justify-between animate-pulse">
-            <div class="flex items-center gap-3">
-                <i class="fa-solid fa-triangle-exclamation text-xl text-rose-400"></i>
-                <div>
-                    <h4 class="font-semibold text-sm">Low Battery Warning</h4>
-                    <p class="text-xs text-rose-300/80">Battery output has dropped below 3.30V (15%). Recharge recommended.</p>
-                </div>
-            </div>
-            <button onclick="dismissAlert()" class="text-rose-400 hover:text-rose-200 text-sm">
-                <i class="fa-solid fa-xmark"></i>
-            </button>
-        </div>
+    <!-- Battery Percentage Card -->
+    <div class="card battery-card">
+      <h3>Battery Capacity</h3>
+      <div class="value"><span id="valPct">0</span> <span class="unit">%</span></div>
+      <div class="battery-bar-container">
+        <div id="batteryBar" class="battery-bar-fill"></div>
+      </div>
+    </div>
+  </div>
 
-        <!-- Metrics Grid -->
-        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
+  <!-- Command Controls -->
+  <div class="controls-panel">
+    <h3>Device Commands</h3>
+    <div class="btn-group">
+      <button class="control-btn" onclick="sendCommand('LED_TOGGLE')">💡 Toggle Alert LED</button>
+      <button class="control-btn" onclick="sendCommand('RESET_STATS')">🔄 Reset Telemetry</button>
+      <button class="control-btn" onclick="sendCommand('PING')">📡 Ping Device</button>
+    </div>
+  </div>
 
-            <!-- Card 1: State of Charge (Battery % Gauge Ring) -->
-            <div class="glass-card rounded-2xl p-5 flex flex-col justify-between relative overflow-hidden">
-                <div class="flex items-center justify-between mb-2">
-                    <span class="text-xs font-semibold text-slate-400 uppercase tracking-wider">State of Charge</span>
-                    <i class="fa-solid fa-battery-half text-slate-500"></i>
-                </div>
+  <!-- Realtime Terminal Console -->
+  <div class="console-panel">
+    <div class="console-header">
+      <span>LIVE BLE LOG STREAM</span>
+      <span style="cursor:pointer;" onclick="clearLogs()">Clear</span>
+    </div>
+    <div id="consoleLogs" class="console-logs">
+      <div class="log-entry info">[System] Ready. Click "Connect BLE" to scan for ESP32.</div>
+    </div>
+  </div>
+</div>
 
-                <div class="flex items-center justify-center py-2 relative">
-                    <!-- SVG Circular Progress -->
-                    <svg class="w-32 h-32 transform -rotate-90" viewBox="0 0 120 120">
-                        <circle cx="60" cy="60" r="50" stroke="currentColor" stroke-width="10" class="text-slate-800" fill="transparent" />
-                        <circle id="batteryRing" cx="60" cy="60" r="50" stroke="currentColor" stroke-width="10" 
-                                class="circle-progress text-cyan-400" 
-                                fill="transparent" 
-                                stroke-dasharray="314.15" 
-                                stroke-dashoffset="314.15" 
-                                stroke-linecap="round" />
-                    </svg>
-                    <div class="absolute flex flex-col items-center">
-                        <span id="socPercentage" class="text-3xl font-extrabold text-white font-mono">0%</span>
-                        <span id="socStatusText" class="text-[10px] text-slate-400 tracking-wider font-medium uppercase mt-0.5">Idle</span>
-                    </div>
-                </div>
+<script>
+  // Nordic UART Service (NUS) Standard UUIDs
+  const NUS_SERVICE_UUID = '6e400001-b5a3-f393-e0a9-e50e24dcca9e';
+  const NUS_RX_UUID      = '6e400002-b5a3-f393-e0a9-e50e24dcca9e'; // Write to ESP32
+  const NUS_TX_UUID      = '6e400003-b5a3-f393-e0a9-e50e24dcca9e'; // Notifications from ESP32
 
-                <div class="mt-2 text-xs text-slate-400 flex justify-between border-t border-slate-800/80 pt-2.5">
-                    <span>Range: 3.20V - 4.20V</span>
-                    <span id="socTrend" class="text-emerald-400 font-mono">100% MAX</span>
-                </div>
-            </div>
+  let bleDevice = null;
+  let rxCharacteristic = null;
+  let txCharacteristic = null;
 
-            <!-- Card 2: Bus Voltage -->
-            <div class="glass-card rounded-2xl p-5 flex flex-col justify-between">
-                <div class="flex items-center justify-between">
-                    <span class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Bus Voltage</span>
-                    <div class="p-2 rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                        <i class="fa-solid fa-car-battery text-sm"></i>
-                    </div>
-                </div>
+  async function toggleConnect() {
+    if (bleDevice && bleDevice.gatt.connected) {
+      disconnectBLE();
+    } else {
+      connectBLE();
+    }
+  }
 
-                <div class="my-4">
-                    <div class="flex items-baseline gap-2">
-                        <span id="voltageVal" class="text-4xl font-extrabold text-white font-mono tracking-tight">0.00</span>
-                        <span class="text-sm font-semibold text-emerald-400">V</span>
-                    </div>
-                    <p class="text-xs text-slate-400 mt-1">Live Terminal Load Potential</p>
-                </div>
+  async function connectBLE() {
+    try {
+      log('Requesting Bluetooth Device...', 'info');
+      bleDevice = await navigator.bluetooth.requestDevice({
+        filters: [{ namePrefix: 'ESP32' }],
+        optionalServices: [NUS_SERVICE_UUID]
+      });
 
-                <div class="w-full bg-slate-800/80 h-1.5 rounded-full overflow-hidden">
-                    <div id="voltageBar" class="bg-emerald-400 h-full w-0 transition-all duration-300"></div>
-                </div>
-            </div>
+      bleDevice.addEventListener('gattserverdisconnected', onDisconnected);
 
-            <!-- Card 3: Current Draw -->
-            <div class="glass-card rounded-2xl p-5 flex flex-col justify-between">
-                <div class="flex items-center justify-between">
-                    <span class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Current Draw</span>
-                    <div class="p-2 rounded-lg bg-cyan-500/10 text-cyan-400 border border-cyan-500/20">
-                        <i class="fa-solid fa-wave-square text-sm"></i>
-                    </div>
-                </div>
+      log('Connecting to GATT Server...', 'info');
+      const server = await bleDevice.gatt.connect();
 
-                <div class="my-4">
-                    <div class="flex items-baseline gap-2">
-                        <span id="currentVal" class="text-4xl font-extrabold text-white font-mono tracking-tight">0</span>
-                        <span id="currentUnit" class="text-sm font-semibold text-cyan-400">mA</span>
-                    </div>
-                    <p class="text-xs text-slate-400 mt-1" id="currentAmpsText">Equivalent: 0.000 A</p>
-                </div>
+      log('Getting Nordic UART Service...', 'info');
+      const service = await server.getPrimaryService(NUS_SERVICE_UUID);
 
-                <div class="w-full bg-slate-800/80 h-1.5 rounded-full overflow-hidden">
-                    <div id="currentBar" class="bg-cyan-400 h-full w-0 transition-all duration-300"></div>
-                </div>
-            </div>
+      log('Getting Characteristics...', 'info');
+      rxCharacteristic = await service.getCharacteristic(NUS_RX_UUID);
+      txCharacteristic = await service.getCharacteristic(NUS_TX_UUID);
 
-            <!-- Card 4: Total Power -->
-            <div class="glass-card rounded-2xl p-5 flex flex-col justify-between">
-                <div class="flex items-center justify-between">
-                    <span class="text-xs font-semibold text-slate-400 uppercase tracking-wider">System Power</span>
-                    <div class="p-2 rounded-lg bg-purple-500/10 text-purple-400 border border-purple-500/20">
-                        <i class="fa-solid fa-plug-circle-bolt text-sm"></i>
-                    </div>
-                </div>
+      await txCharacteristic.startNotifications();
+      txCharacteristic.addEventListener('characteristicvaluechanged', handleNotifications);
 
-                <div class="my-4">
-                    <div class="flex items-baseline gap-2">
-                        <span id="powerVal" class="text-4xl font-extrabold text-white font-mono tracking-tight">0</span>
-                        <span id="powerUnit" class="text-sm font-semibold text-purple-400">mW</span>
-                    </div>
-                    <p class="text-xs text-slate-400 mt-1" id="powerWattsText">Instantaneous Consumption</p>
-                </div>
+      updateUIConnected(true);
+      log('Connected successfully to ESP32!', 'info');
 
-                <div class="w-full bg-slate-800/80 h-1.5 rounded-full overflow-hidden">
-                    <div id="powerBar" class="bg-purple-400 h-full w-0 transition-all duration-300"></div>
-                </div>
-            </div>
+    } catch (error) {
+      log('Error: ' + error.message, 'err');
+      updateUIConnected(false);
+    }
+  }
 
-        </div>
+  function disconnectBLE() {
+    if (bleDevice && bleDevice.gatt.connected) {
+      bleDevice.gatt.disconnect();
+    }
+  }
 
-        <!-- Middle Section: Remote Controls & Diagnostics -->
-        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+  function onDisconnected() {
+    updateUIConnected(false);
+    log('Device disconnected', 'err');
+  }
 
-            <!-- Control Buttons Panel -->
-            <div class="glass-card rounded-2xl p-5 space-y-4 lg:col-span-1 flex flex-col justify-between">
-                <div>
-                    <h3 class="text-sm font-semibold text-white tracking-wide uppercase flex items-center gap-2 mb-4">
-                        <i class="fa-solid fa-sliders text-cyan-400"></i>
-                        Hardware Controls
-                    </h3>
+  function updateUIConnected(isConnected) {
+    const btn = document.getElementById('connectBtn');
+    const badge = document.getElementById('statusBadge');
 
-                    <div class="space-y-3">
-                        <!-- Toggle Alert LED Button -->
-                        <button id="toggleLedBtn" onclick="sendBleCommand('TOGGLE_LED')" disabled 
-                                class="w-full p-3.5 rounded-xl bg-slate-900 border border-slate-800 hover:border-cyan-500/40 text-slate-300 hover:text-white flex items-center justify-between transition-all duration-200 disabled:opacity-40 disabled:cursor-not-allowed">
-                            <div class="flex items-center gap-3">
-                                <i class="fa-solid fa-lightbulb text-amber-400"></i>
-                                <div class="text-left">
-                                    <div class="text-xs font-semibold">Toggle Alert LED</div>
-                                    <div class="text-[10px] text-slate-500">GPIO 2 Indicator Control</div>
-                                </div>
-                            </div>
-                            <span id="ledStatusBadge" class="text-[10px] font-mono px-2 py-0.5 rounded bg-slate-800 text-slate-400">UNKNOWN</span>
-                        </button>
+    if (isConnected) {
+      btn.innerHTML = '<span>Disconnect</span>';
+      btn.classList.add('btn-disconnect');
+      badge.className = 'status-badge online';
+      badge.innerHTML = '<span class="dot"></span> Connected';
+    } else {
+      btn.innerHTML = '<span>Connect BLE</span>';
+      btn.classList.remove('btn-disconnect');
+      badge.className = 'status-badge';
+      badge.innerHTML = '<span class="dot"></span> Disconnected';
+    }
+  }
 
-                        <!-- Force Telemetry Request Button -->
-                        <button id="refreshDataBtn" onclick="sendBleCommand('GET_READING')" disabled 
-                                class="w-full p-3.5 rounded-xl bg-slate-900 border border-slate-800 hover:border-emerald-500/40 text-slate-300 hover:text-white flex items-center justify-between transition-all duration-200 disabled:opacity-40 disabled:cursor-not-allowed">
-                            <div class="flex items-center gap-3">
-                                <i class="fa-solid fa-arrows-rotate text-emerald-400"></i>
-                                <div class="text-left">
-                                    <div class="text-xs font-semibold">Request Telemetry Poll</div>
-                                    <div class="text-[10px] text-slate-500">Force immediate INA219 update</div>
-                                </div>
-                            </div>
-                            <i class="fa-solid fa-chevron-right text-xs text-slate-600"></i>
-                        </button>
-                    </div>
-                </div>
+  // Handle incoming data packets from ESP32
+  let rxBuffer = '';
+  function handleNotifications(event) {
+    const value = event.target.value;
+    const decoder = new TextDecoder('utf-8');
+    rxBuffer += decoder.decode(value);
 
-                <!-- Auxiliary Metrics Box -->
-                <div class="p-3.5 rounded-xl bg-slate-950/60 border border-slate-800/80 space-y-2 mt-4">
-                    <div class="text-[11px] text-slate-400 font-semibold uppercase tracking-wider flex justify-between">
-                        <span>Shunt Drop Voltage</span>
-                        <span id="shuntVal" class="font-mono text-cyan-400">0.00 mV</span>
-                    </div>
-                    <div class="text-[11px] text-slate-400 font-semibold uppercase tracking-wider flex justify-between">
-                        <span>Calibration Limit</span>
-                        <span class="font-mono text-slate-300">32V / 2.0A</span>
-                    </div>
-                </div>
-            </div>
+    // Process line by line
+    const lines = rxBuffer.split('\n');
+    rxBuffer = lines.pop(); // keep remaining unfinished string fragment
 
-            <!-- Terminal Output Log -->
-            <div class="glass-card rounded-2xl p-5 lg:col-span-2 flex flex-col h-80 sm:h-auto">
-                <div class="flex items-center justify-between mb-3">
-                    <h3 class="text-sm font-semibold text-white tracking-wide uppercase flex items-center gap-2">
-                        <i class="fa-solid fa-terminal text-emerald-400"></i>
-                        Live Bluetooth Terminal Console
-                    </h3>
-                    <div class="flex items-center gap-2">
-                        <button onclick="clearConsole()" class="px-2.5 py-1 text-[11px] font-mono rounded-lg bg-slate-800 text-slate-400 hover:text-slate-200 hover:bg-slate-700 transition">
-                            Clear Log
-                        </button>
-                    </div>
-                </div>
+    for (let line of lines) {
+      line = line.trim();
+      if (!line) continue;
 
-                <!-- Terminal Display Box -->
-                <div id="terminalOutput" class="grow bg-slate-950 border border-slate-900 rounded-xl p-3.5 font-mono text-xs text-slate-300 overflow-y-auto space-y-1.5 shadow-inner">
-                    <div class="text-slate-600">-- BLE Telemetry Console Initialized --</div>
-                    <div class="text-slate-500">Click [Connect BLE] to pair with 'ESP32_Battery_Monitor'</div>
-                </div>
-            </div>
+      log('RX: ' + line);
 
-        </div>
-
-    </main>
-
-    <!-- Footer -->
-    <footer class="border-t border-slate-900 bg-slate-950/60 py-4 text-center text-xs text-slate-500">
-        <p>ESP32 Bluetooth Low Energy Telemetry • Nordic UART Service (NUS)</p>
-    </footer>
-
-    <script>
-        // Nordic UART Service (NUS) UUIDs
-        const NUS_SERVICE_UUID = '6e400001-b5a3-f393-e0a9-e50e24dcca9e';
-        const NUS_CHARACTERISTIC_RX = '6e400002-b5a3-f393-e0a9-e50e24dcca9e'; // Write to ESP32
-        const NUS_CHARACTERISTIC_TX = '6e400003-b5a3-f393-e0a9-e50e24dcca9e'; // Notifications from ESP32
-
-        // BLE State Variables
-        let bleDevice = null;
-        let gattServer = null;
-        let rxCharacteristic = null;
-        let txCharacteristic = null;
-        let isConnected = false;
-
-        // UI Element References
-        const connectBtn = document.getElementById('connectBtn');
-        const btnText = document.getElementById('btnText');
-        const statusDot = document.getElementById('statusDot');
-        const statusText = document.getElementById('statusText');
-        const toggleLedBtn = document.getElementById('toggleLedBtn');
-        const refreshDataBtn = document.getElementById('refreshDataBtn');
-        const terminalOutput = document.getElementById('terminalOutput');
-        const alertBanner = document.getElementById('alertBanner');
-
-        // Toggle Bluetooth Connection
-        async function toggleBluetooth() {
-            if (isConnected) {
-                disconnectBLE();
-            } else {
-                await requestBLEConnection();
-            }
+      // Parse JSON payload format: {"v":4.12, "i":150.5, "p":620.0, "pct":92}
+      try {
+        if (line.startsWith('{') && line.endsWith('}')) {
+          const data = JSON.parse(line);
+          updateTelemetry(data);
         }
+      } catch (e) {
+        // Line wasn't JSON, just normal text
+      }
+    }
+  }
 
-        // Request BLE Device Connection
-        async function requestBLEConnection() {
-            try {
-                logToTerminal('Scanning for BLE devices...', 'system');
-                
-                bleDevice = await navigator.bluetooth.requestDevice({
-                    filters: [{ namePrefix: 'ESP32' }],
-                    optionalServices: [NUS_SERVICE_UUID]
-                });
+  function updateTelemetry(data) {
+    if (data.v !== undefined) document.getElementById('valVolt').innerText = data.v.toFixed(2);
+    if (data.i !== undefined) document.getElementById('valCurr').innerText = Math.round(data.i);
+    if (data.p !== undefined) document.getElementById('valPow').innerText = Math.round(data.p);
+    
+    if (data.pct !== undefined) {
+      const pct = Math.min(100, Math.max(0, data.pct));
+      document.getElementById('valPct').innerText = pct;
+      const bar = document.getElementById('batteryBar');
+      bar.style.width = pct + '%';
 
-                logToTerminal(`Device selected: ${bleDevice.name}`, 'system');
-                
-                bleDevice.addEventListener('gattserverdisconnected', onDisconnected);
+      if (pct <= 15) {
+        bar.style.backgroundColor = 'var(--danger)';
+      } else {
+        bar.style.backgroundColor = 'var(--accent)';
+      }
+    }
+  }
 
-                // Connect to GATT Server
-                logToTerminal('Connecting to GATT Server...', 'system');
-                gattServer = await bleDevice.gatt.connect();
+  async function sendCommand(cmd) {
+    if (!rxCharacteristic) {
+      log('Not connected to device!', 'err');
+      return;
+    }
 
-                // Get Nordic UART Service
-                const service = await gattServer.getPrimaryService(NUS_SERVICE_UUID);
+    try {
+      const encoder = new TextEncoder();
+      await rxCharacteristic.writeValue(encoder.encode(cmd + '\n'));
+      log('TX: ' + cmd, 'info');
+    } catch (error) {
+      log('Failed to send command: ' + error.message, 'err');
+    }
+  }
 
-                // Get Characteristics
-                rxCharacteristic = await service.getCharacteristic(NUS_CHARACTERISTIC_RX);
-                txCharacteristic = await service.getCharacteristic(NUS_CHARACTERISTIC_TX);
+  function log(msg, type = '') {
+    const logs = document.getElementById('consoleLogs');
+    const div = document.createElement('div');
+    div.className = 'log-entry ' + type;
+    const timestamp = new Date().toLocaleTimeString();
+    div.innerText = `[${timestamp}] ${msg}`;
+    logs.appendChild(div);
+    logs.scrollTop = logs.scrollHeight;
+  }
 
-                // Enable TX Notifications
-                await txCharacteristic.startNotifications();
-                txCharacteristic.addEventListener('characteristicvaluechanged', handleIncomingData);
-
-                updateConnectionState(true);
-                logToTerminal('Connected successfully via BLE!', 'success');
-
-            } catch (error) {
-                logToTerminal(`Error: ${error.message || error}`, 'error');
-                updateConnectionState(false);
-            }
-        }
-
-        // Handle Connection Disconnect
-        function disconnectBLE() {
-            if (bleDevice && bleDevice.gatt.connected) {
-                bleDevice.gatt.disconnect();
-            }
-            onDisconnected();
-        }
-
-        function onDisconnected() {
-            updateConnectionState(false);
-            logToTerminal('Disconnected from BLE device.', 'warning');
-        }
-
-        // Update UI state on Connect/Disconnect
-        function updateConnectionState(connected) {
-            isConnected = connected;
-            if (connected) {
-                btnText.textContent = 'Disconnect';
-                statusDot.className = 'w-2 h-2 rounded-full bg-emerald-400 glow-emerald';
-                statusText.textContent = bleDevice ? bleDevice.name : 'Connected';
-                toggleLedBtn.disabled = false;
-                refreshDataBtn.disabled = false;
-            } else {
-                btnText.textContent = 'Connect BLE';
-                statusDot.className = 'w-2 h-2 rounded-full bg-slate-500';
-                statusText.textContent = 'Disconnected';
-                toggleLedBtn.disabled = true;
-                refreshDataBtn.disabled = true;
-                bleDevice = null;
-                gattServer = null;
-            }
-        }
-
-        // Send Command String to ESP32 over BLE RX Characteristic
-        async function sendBleCommand(cmd) {
-            if (!rxCharacteristic || !isConnected) return;
-            try {
-                const encoder = new TextEncoder();
-                await rxCharacteristic.writeValue(encoder.encode(cmd + '\n'));
-                logToTerminal(`> Sent command: ${cmd}`, 'outbound');
-            } catch (err) {
-                logToTerminal(`Failed to send command: ${err}`, 'error');
-            }
-        }
-
-        // Process incoming telemetry data stream from ESP32 TX Characteristic
-        function handleIncomingData(event) {
-            const value = event.target.value;
-            const decoder = new TextDecoder('utf-8');
-            const dataStr = decoder.decode(value).trim();
-
-            logToTerminal(`< ${dataStr}`, 'inbound');
-
-            // Try to parse JSON formatted telemetry payload
-            try {
-                if (dataStr.startsWith('{') && dataStr.endsWith('}')) {
-                    const data = JSON.parse(dataStr);
-                    updateDashboardMetrics(data);
-                }
-            } catch (err) {
-                // Ignore raw non-JSON text logs
-            }
-        }
-
-        // Update Gauges and Visual Cards
-        function updateDashboardMetrics(data) {
-            const { v, i, p, pct, shunt, led } = data;
-
-            // 1. Bus Voltage
-            if (v !== undefined) {
-                document.getElementById('voltageVal').textContent = v.toFixed(2);
-                const vPercent = Math.min(Math.max(((v - 3.0) / 1.5) * 100, 0), 100);
-                document.getElementById('voltageBar').style.width = `${vPercent}%`;
-            }
-
-            // 2. Current
-            if (i !== undefined) {
-                document.getElementById('currentVal').textContent = Math.round(i);
-                document.getElementById('currentAmpsText').textContent = `Equivalent: ${(i / 1000).toFixed(3)} A`;
-                const iPercent = Math.min((i / 2000) * 100, 100); // Scale against 2000mA limit
-                document.getElementById('currentBar').style.width = `${iPercent}%`;
-            }
-
-            // 3. Power
-            if (p !== undefined) {
-                document.getElementById('powerVal').textContent = Math.round(p);
-                const pPercent = Math.min((p / 8000) * 100, 100); // Scale against 8000mW limit
-                document.getElementById('powerBar').style.width = `${pPercent}%`;
-            }
-
-            // 4. Shunt Voltage
-            if (shunt !== undefined) {
-                document.getElementById('shuntVal').textContent = `${shunt.toFixed(2)} mV`;
-            }
-
-            // 5. LED Status Badge
-            if (led !== undefined) {
-                const badge = document.getElementById('ledStatusBadge');
-                badge.textContent = led ? 'STATE: ON' : 'STATE: OFF';
-                badge.className = led 
-                    ? 'text-[10px] font-mono px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30' 
-                    : 'text-[10px] font-mono px-2 py-0.5 rounded bg-slate-800 text-slate-400';
-            }
-
-            // 6. Battery State of Charge Ring & Alerts
-            if (pct !== undefined) {
-                document.getElementById('socPercentage').textContent = `${pct}%`;
-                
-                // Update Circular Ring Offset (Circumference = 2 * PI * 50 = ~314.15)
-                const circumference = 314.15;
-                const offset = circumference - (pct / 100) * circumference;
-                const batteryRing = document.getElementById('batteryRing');
-                batteryRing.style.strokeDashoffset = offset;
-
-                const socStatusText = document.getElementById('socStatusText');
-
-                if (pct <= 15) {
-                    batteryRing.setAttribute('class', 'circle-progress text-rose-500');
-                    alertBanner.classList.remove('hidden');
-                    socStatusText.textContent = 'Critical Low';
-                    socStatusText.className = 'text-[10px] text-rose-400 tracking-wider font-medium uppercase mt-0.5';
-                } else if (pct <= 40) {
-                    batteryRing.setAttribute('class', 'circle-progress text-amber-400');
-                    alertBanner.classList.add('hidden');
-                    socStatusText.textContent = 'Discharging';
-                    socStatusText.className = 'text-[10px] text-amber-400 tracking-wider font-medium uppercase mt-0.5';
-                } else {
-                    batteryRing.setAttribute('class', 'circle-progress text-emerald-400');
-                    alertBanner.classList.add('hidden');
-                    socStatusText.textContent = 'Normal';
-                    socStatusText.className = 'text-[10px] text-emerald-400 tracking-wider font-medium uppercase mt-0.5';
-                }
-            }
-        }
-
-        // Print lines into Live Terminal Log Box
-        function logToTerminal(message, type = 'info') {
-            const line = document.createElement('div');
-            const timestamp = new Date().toLocaleTimeString();
-
-            let colorClass = 'text-slate-300';
-            if (type === 'outbound') colorClass = 'text-cyan-400 font-semibold';
-            if (type === 'inbound') colorClass = 'text-emerald-400';
-            if (type === 'system') colorClass = 'text-purple-400';
-            if (type === 'warning') colorClass = 'text-amber-400';
-            if (type === 'error') colorClass = 'text-rose-400';
-
-            line.className = `${colorClass} leading-relaxed flex items-start gap-2`;
-            line.innerHTML = `<span class="text-slate-600 shrink-0">[${timestamp}]</span> <span>${escapeHtml(message)}</span>`;
-
-            terminalOutput.appendChild(line);
-            terminalOutput.scrollTop = terminalOutput.scrollHeight;
-        }
-
-        function clearConsole() {
-            terminalOutput.innerHTML = '<div class="text-slate-600">-- Log Cleared --</div>';
-        }
-
-        function dismissAlert() {
-            alertBanner.classList.add('hidden');
-        }
-
-        function escapeHtml(text) {
-            return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-        }
-    </script>
+  function clearLogs() {
+    document.getElementById('consoleLogs').innerHTML = '';
+  }
+</script>
 </body>
 </html>
-```
