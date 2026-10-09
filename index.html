@@ -3,247 +3,58 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>ESP32 Telemetry & Battery Dashboard</title>
+  <title>ESP32 Battery & Climate Telemetry Dashboard</title>
   <style>
     :root {
       --bg: #090d16;
       --card-bg: #111827;
       --border: #1f2937;
       --accent: #10b981;
-      --accent-glow: rgba(16, 185, 129, 0.2);
       --danger: #ef4444;
       --text: #f3f4f6;
       --subtext: #9ca3af;
       --blue: #3b82f6;
       --purple: #8b5cf6;
+      --orange: #f97316;
+      --cyan: #06b6d4;
     }
 
-    * {
-      box-sizing: border-box;
-      margin: 0;
-      padding: 0;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-    }
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    body { background-color: var(--bg); color: var(--text); min-height: 100vh; padding: 20px; display: flex; flex-direction: column; align-items: center; }
+    .container { width: 100%; max-width: 900px; display: flex; flex-direction: column; gap: 20px; }
 
-    body {
-      background-color: var(--bg);
-      color: var(--text);
-      min-height: 100vh;
-      padding: 20px;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-    }
+    header { display: flex; justify-content: space-between; align-items: center; background: var(--card-bg); padding: 16px 24px; border-radius: 16px; border: 1px solid var(--border); }
+    .title-group h1 { font-size: 1.3rem; font-weight: 700; display: flex; align-items: center; gap: 10px; }
+    .title-group p { font-size: 0.85rem; color: var(--subtext); margin-top: 2px; }
 
-    .container {
-      width: 100%;
-      max-width: 850px;
-      display: flex;
-      flex-direction: column;
-      gap: 20px;
-    }
+    .btn { background: var(--accent); color: #000; font-weight: 600; border: none; padding: 10px 18px; border-radius: 10px; cursor: pointer; display: flex; align-items: center; gap: 8px; transition: all 0.2s; }
+    .btn:hover { opacity: 0.9; transform: translateY(-1px); }
+    .btn-disconnect { background: var(--danger); color: white; }
 
-    header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      background: var(--card-bg);
-      padding: 16px 24px;
-      border-radius: 16px;
-      border: 1px solid var(--border);
-    }
+    .status-badge { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 20px; font-size: 0.75rem; background: #1f2937; color: var(--subtext); }
+    .status-badge.online { background: rgba(16, 185, 129, 0.15); color: var(--accent); border: 1px solid rgba(16, 185, 129, 0.3); }
+    .dot { width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
 
-    .title-group h1 {
-      font-size: 1.3rem;
-      font-weight: 700;
-      display: flex;
-      align-items: center;
-      gap: 10px;
-    }
+    .metrics-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 16px; }
+    .card { background: var(--card-bg); border: 1px solid var(--border); border-radius: 16px; padding: 20px; display: flex; flex-direction: column; position: relative; overflow: hidden; }
+    .card h3 { font-size: 0.75rem; color: var(--subtext); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px; }
+    .card .value { font-size: 1.8rem; font-weight: 700; color: var(--text); }
+    .card .unit { font-size: 0.9rem; color: var(--subtext); font-weight: 400; }
 
-    .title-group p {
-      font-size: 0.85rem;
-      color: var(--subtext);
-      margin-top: 2px;
-    }
+    .battery-card { grid-column: span 1; display: flex; flex-direction: column; justify-content: space-between; }
+    .battery-bar-container { width: 100%; height: 12px; background: #1f2937; border-radius: 10px; overflow: hidden; margin-top: 12px; position: relative; }
+    .battery-bar-fill { height: 100%; width: 0%; background: var(--accent); transition: width 0.4s ease, background-color 0.4s ease; }
 
-    .btn {
-      background: var(--accent);
-      color: #000;
-      font-weight: 600;
-      border: none;
-      padding: 10px 18px;
-      border-radius: 10px;
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      transition: all 0.2s;
-    }
+    .controls-panel { background: var(--card-bg); border: 1px solid var(--border); border-radius: 16px; padding: 20px; }
+    .controls-panel h3 { font-size: 0.85rem; color: var(--subtext); margin-bottom: 12px; text-transform: uppercase; }
+    .btn-group { display: flex; gap: 12px; flex-wrap: wrap; }
+    .control-btn { background: #1f2937; color: var(--text); border: 1px solid var(--border); padding: 10px 18px; border-radius: 10px; font-weight: 600; cursor: pointer; transition: all 0.2s; }
+    .control-btn:hover { background: #374151; }
 
-    .btn:hover {
-      opacity: 0.9;
-      transform: translateY(-1px);
-    }
-
-    .btn-disconnect {
-      background: var(--danger);
-      color: white;
-    }
-
-    .status-badge {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      padding: 4px 10px;
-      border-radius: 20px;
-      font-size: 0.75rem;
-      background: #1f2937;
-      color: var(--subtext);
-    }
-
-    .status-badge.online {
-      background: rgba(16, 185, 129, 0.15);
-      color: var(--accent);
-      border: 1px solid rgba(16, 185, 129, 0.3);
-    }
-
-    .dot {
-      width: 8px;
-      height: 8px;
-      border-radius: 50%;
-      background: currentColor;
-    }
-
-    /* Grid Layout */
-    .metrics-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-      gap: 16px;
-    }
-
-    .card {
-      background: var(--card-bg);
-      border: 1px solid var(--border);
-      border-radius: 16px;
-      padding: 20px;
-      display: flex;
-      flex-direction: column;
-      position: relative;
-      overflow: hidden;
-    }
-
-    .card h3 {
-      font-size: 0.8rem;
-      color: var(--subtext);
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
-      margin-bottom: 10px;
-    }
-
-    .card .value {
-      font-size: 2rem;
-      font-weight: 700;
-      color: var(--text);
-    }
-
-    .card .unit {
-      font-size: 1rem;
-      color: var(--subtext);
-      font-weight: 400;
-    }
-
-    /* Battery Card Special Styling */
-    .battery-card {
-      grid-column: span 1;
-      display: flex;
-      flex-direction: column;
-      justify-content: space-between;
-    }
-
-    .battery-bar-container {
-      width: 100%;
-      height: 14px;
-      background: #1f2937;
-      border-radius: 10px;
-      overflow: hidden;
-      margin-top: 15px;
-      position: relative;
-    }
-
-    .battery-bar-fill {
-      height: 100%;
-      width: 0%;
-      background: var(--accent);
-      transition: width 0.4s ease, background-color 0.4s ease;
-    }
-
-    /* Control Panel Section */
-    .controls-panel {
-      background: var(--card-bg);
-      border: 1px solid var(--border);
-      border-radius: 16px;
-      padding: 20px;
-    }
-
-    .controls-panel h3 {
-      font-size: 0.9rem;
-      color: var(--subtext);
-      margin-bottom: 15px;
-      text-transform: uppercase;
-    }
-
-    .btn-group {
-      display: flex;
-      gap: 12px;
-      flex-wrap: wrap;
-    }
-
-    .control-btn {
-      background: #1f2937;
-      color: var(--text);
-      border: 1px solid var(--border);
-      padding: 12px 20px;
-      border-radius: 10px;
-      font-weight: 600;
-      cursor: pointer;
-      transition: all 0.2s;
-    }
-
-    .control-btn:hover {
-      background: #374151;
-    }
-
-    /* Terminal Console */
-    .console-panel {
-      background: #000;
-      border: 1px solid var(--border);
-      border-radius: 16px;
-      padding: 16px;
-      font-family: "Courier New", Courier, monospace;
-    }
-
-    .console-header {
-      display: flex;
-      justify-content: space-between;
-      color: var(--subtext);
-      font-size: 0.8rem;
-      margin-bottom: 8px;
-    }
-
-    .console-logs {
-      height: 120px;
-      overflow-y: auto;
-      font-size: 0.85rem;
-      color: var(--accent);
-      display: flex;
-      flex-direction: column;
-      gap: 4px;
-    }
-
-    .log-entry {
-      opacity: 0.9;
-    }
+    .console-panel { background: #000; border: 1px solid var(--border); border-radius: 16px; padding: 16px; font-family: "Courier New", Courier, monospace; }
+    .console-header { display: flex; justify-content: space-between; color: var(--subtext); font-size: 0.8rem; margin-bottom: 8px; }
+    .console-logs { height: 110px; overflow-y: auto; font-size: 0.85rem; color: var(--accent); display: flex; flex-direction: column; gap: 4px; }
+    .log-entry { opacity: 0.9; }
     .log-entry.err { color: var(--danger); }
     .log-entry.info { color: var(--blue); }
 
@@ -256,11 +67,10 @@
 <body>
 
 <div class="container">
-  <!-- Header -->
   <header>
     <div class="title-group">
       <h1>🔋 ESP32 Telemetry Dashboard</h1>
-      <p>Web Bluetooth API (BLE) Direct Connection</p>
+      <p>INA219 Power Monitor & DHT11 Climate Sensor over BLE</p>
     </div>
     <div style="display:flex; align-items:center; gap:12px;">
       <span id="statusBadge" class="status-badge"><span class="dot"></span> Disconnected</span>
@@ -272,25 +82,21 @@
 
   <!-- Metrics Grid -->
   <div class="metrics-grid">
-    <!-- Voltage -->
     <div class="card">
-      <h3>Bus Voltage</h3>
+      <h3>Voltage</h3>
       <div class="value"><span id="valVolt">0.00</span> <span class="unit">V</span></div>
     </div>
 
-    <!-- Current -->
     <div class="card">
       <h3>Current Draw</h3>
       <div class="value" style="color: var(--blue)"><span id="valCurr">0</span> <span class="unit">mA</span></div>
     </div>
 
-    <!-- Power -->
     <div class="card">
-      <h3>Power Consumption</h3>
+      <h3>Power Usage</h3>
       <div class="value" style="color: var(--purple)"><span id="valPow">0</span> <span class="unit">mW</span></div>
     </div>
 
-    <!-- Battery Percentage Card -->
     <div class="card battery-card">
       <h3>Battery Capacity</h3>
       <div class="value"><span id="valPct">0</span> <span class="unit">%</span></div>
@@ -298,35 +104,43 @@
         <div id="batteryBar" class="battery-bar-fill"></div>
       </div>
     </div>
+
+    <!-- DHT11 Temperature Card -->
+    <div class="card">
+      <h3>Temperature</h3>
+      <div class="value" style="color: var(--orange)"><span id="valTemp">--</span> <span class="unit">°C</span></div>
+    </div>
+
+    <!-- DHT11 Humidity Card -->
+    <div class="card">
+      <h3>Humidity</h3>
+      <div class="value" style="color: var(--cyan)"><span id="valHum">--</span> <span class="unit">%</span></div>
+    </div>
   </div>
 
-  <!-- Command Controls -->
   <div class="controls-panel">
     <h3>Device Commands</h3>
     <div class="btn-group">
       <button class="control-btn" onclick="sendCommand('LED_TOGGLE')">💡 Toggle Alert LED</button>
-      <button class="control-btn" onclick="sendCommand('RESET_STATS')">🔄 Reset Telemetry</button>
       <button class="control-btn" onclick="sendCommand('PING')">📡 Ping Device</button>
     </div>
   </div>
 
-  <!-- Realtime Terminal Console -->
   <div class="console-panel">
     <div class="console-header">
-      <span>LIVE BLE LOG STREAM</span>
+      <span>LIVE BLE TELEMETRY STREAM</span>
       <span style="cursor:pointer;" onclick="clearLogs()">Clear</span>
     </div>
     <div id="consoleLogs" class="console-logs">
-      <div class="log-entry info">[System] Ready. Click "Connect BLE" to scan for ESP32.</div>
+      <div class="log-entry info">[System] Dashboard Ready. Click "Connect BLE" to start.</div>
     </div>
   </div>
 </div>
 
 <script>
-  // Nordic UART Service (NUS) Standard UUIDs
   const NUS_SERVICE_UUID = '6e400001-b5a3-f393-e0a9-e50e24dcca9e';
-  const NUS_RX_UUID      = '6e400002-b5a3-f393-e0a9-e50e24dcca9e'; // Write to ESP32
-  const NUS_TX_UUID      = '6e400003-b5a3-f393-e0a9-e50e24dcca9e'; // Notifications from ESP32
+  const NUS_RX_UUID      = '6e400002-b5a3-f393-e0a9-e50e24dcca9e';
+  const NUS_TX_UUID      = '6e400003-b5a3-f393-e0a9-e50e24dcca9e';
 
   let bleDevice = null;
   let rxCharacteristic = null;
@@ -342,7 +156,7 @@
 
   async function connectBLE() {
     try {
-      log('Requesting Bluetooth Device...', 'info');
+      log('Scanning for ESP32 BLE Device...', 'info');
       bleDevice = await navigator.bluetooth.requestDevice({
         filters: [{ namePrefix: 'ESP32' }],
         optionalServices: [NUS_SERVICE_UUID]
@@ -353,10 +167,9 @@
       log('Connecting to GATT Server...', 'info');
       const server = await bleDevice.gatt.connect();
 
-      log('Getting Nordic UART Service...', 'info');
+      log('Opening Nordic UART Service...', 'info');
       const service = await server.getPrimaryService(NUS_SERVICE_UUID);
 
-      log('Getting Characteristics...', 'info');
       rxCharacteristic = await service.getCharacteristic(NUS_RX_UUID);
       txCharacteristic = await service.getCharacteristic(NUS_TX_UUID);
 
@@ -364,7 +177,7 @@
       txCharacteristic.addEventListener('characteristicvaluechanged', handleNotifications);
 
       updateUIConnected(true);
-      log('Connected successfully to ESP32!', 'info');
+      log('Connected to ESP32!', 'info');
 
     } catch (error) {
       log('Error: ' + error.message, 'err');
@@ -400,16 +213,14 @@
     }
   }
 
-  // Handle incoming data packets from ESP32
   let rxBuffer = '';
   function handleNotifications(event) {
     const value = event.target.value;
     const decoder = new TextDecoder('utf-8');
     rxBuffer += decoder.decode(value);
 
-    // Process line by line
     const lines = rxBuffer.split('\n');
-    rxBuffer = lines.pop(); // keep remaining unfinished string fragment
+    rxBuffer = lines.pop();
 
     for (let line of lines) {
       line = line.trim();
@@ -417,15 +228,12 @@
 
       log('RX: ' + line);
 
-      // Parse JSON payload format: {"v":4.12, "i":150.5, "p":620.0, "pct":92}
       try {
         if (line.startsWith('{') && line.endsWith('}')) {
           const data = JSON.parse(line);
           updateTelemetry(data);
         }
-      } catch (e) {
-        // Line wasn't JSON, just normal text
-      }
+      } catch (e) {}
     }
   }
 
@@ -439,18 +247,16 @@
       document.getElementById('valPct').innerText = pct;
       const bar = document.getElementById('batteryBar');
       bar.style.width = pct + '%';
-
-      if (pct <= 15) {
-        bar.style.backgroundColor = 'var(--danger)';
-      } else {
-        bar.style.backgroundColor = 'var(--accent)';
-      }
+      bar.style.backgroundColor = (pct <= 15) ? 'var(--danger)' : 'var(--accent)';
     }
+
+    if (data.temp !== undefined) document.getElementById('valTemp').innerText = data.temp.toFixed(1);
+    if (data.hum !== undefined) document.getElementById('valHum').innerText = Math.round(data.hum);
   }
 
   async function sendCommand(cmd) {
     if (!rxCharacteristic) {
-      log('Not connected to device!', 'err');
+      log('Not connected!', 'err');
       return;
     }
 
@@ -459,7 +265,7 @@
       await rxCharacteristic.writeValue(encoder.encode(cmd + '\n'));
       log('TX: ' + cmd, 'info');
     } catch (error) {
-      log('Failed to send command: ' + error.message, 'err');
+      log('Send failed: ' + error.message, 'err');
     }
   }
 
